@@ -32,7 +32,6 @@ unsigned int cubeVAO;
 unsigned int lightVAO;
 
 unsigned int lightingShader;
-unsigned int lampShader;
 
 // settings
 const unsigned int SCR_WIDTH = 1800;
@@ -53,13 +52,16 @@ float lightX, lightY, lightZ;
 glm::vec3 lightPos;
 glm::vec3 sunLightPos;
 
+float cameraYVelocity = 5.0f * deltaTime;
+bool isJumping = false;
+float initialCameraYPosition = camera.Position.y; // Store the initial Y position of the camera
+
 bool rotFlg1 = false;
 float angle1 = 0.0f;
 
 void init(void)
 {
-    lightingShader = loadShader("../../src/shader/lighting_maps.vert", "../../src/shader/lighting_maps.frag");
-    lampShader = loadShader("../../src/shader/lamp.vert", "../../src/shader/lamp.frag");
+    //lightingShader = loadShader("../../src/shader/lighting_maps.vert", "../../src/shader/lighting_maps.frag");
 
     float planeVertices[] = {
         // positions          // texture Coords 
@@ -147,8 +149,7 @@ int main()
     Model ourModel(FileSystem::getPath("resources/objects/earth/earth.obj"));
     Model sunModel(FileSystem::getPath("resources/objects/sun/sun.obj"));
     Model marsModel(FileSystem::getPath("resources/objects/mars/planet.obj"));
-    Model flagModel(FileSystem::getPath("resources/objects/cyberclone/cybercore.obj"));
-
+    Model flagModel(FileSystem::getPath("resources/objects/flag/flag.obj"));
 
     // unflip skybox
     stbi_set_flip_vertically_on_load(false);
@@ -210,12 +211,12 @@ int main()
     glGenBuffers(1, &skyboxVBO);
     glBindVertexArray(skyboxVAO);
 
-    glGenBuffers(1, &skyboxVBO);
     glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
-
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+    glBindVertexArray(0);
 
     // load textures
     // -------------
@@ -237,7 +238,15 @@ int main()
     skyboxShader.use();
     skyboxShader.setInt("skybox", 0);
 
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Texture coordinates attribute
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
+    glEnableVertexAttribArray(1);
+
     init();
+    Shader lampShader("../../src/shader/lamp.vert", "../../src/shader/lamp.frag");
 
     Shader planeShader("../../src/shader/planeShader.vert", "../../src/shader/planeShader.frag");
 
@@ -248,6 +257,23 @@ int main()
     glm::vec3 lightAmbient(0.1f, 0.1f, 0.1f);
     glm::vec3 lightDiffuse(0.8f, 0.8f, 0.8f);
     glm::vec3 lightSpecular(1.0f, 1.0f, 1.0f);
+
+    // Pass light properties to shaders
+    ourShader.setVec3("light.position", lightPos);
+    ourShader.setVec3("light.ambient", lightAmbient);
+    ourShader.setVec3("light.diffuse", lightDiffuse);
+    ourShader.setVec3("light.specular", lightSpecular);
+
+    glm::vec3 materialAmbient(1.0f, 0.5f, 0.31f);
+    glm::vec3 materialDiffuse(1.0f, 0.5f, 0.31f);
+    glm::vec3 materialSpecular(0.5f, 0.5f, 0.5f);
+    float shininess = 32.0f;
+
+    // Pass material properties to shaders
+    ourShader.setVec3("material.ambient", materialAmbient);
+    ourShader.setVec3("material.diffuse", materialDiffuse);
+    ourShader.setVec3("material.specular", materialSpecular);
+    ourShader.setFloat("material.shininess", shininess);
 
     // render loop
     // -----------
@@ -263,23 +289,56 @@ int main()
         // -----
         processInput(window);
 
+
+        // jumping action
+        camera.Position.y += cameraYVelocity * deltaTime;
+        cameraYVelocity -= 9.81f * deltaTime;
+        if (camera.Position.y <= initialCameraYPosition)
+        {
+            camera.Position.y = initialCameraYPosition;
+            cameraYVelocity = 0.0f;
+            isJumping = false;
+        }
+
+
         // render
         // ------
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // use shader
-        planeShader.use();
-
-        // view/projection transformations
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
+
+        // render the sun
+        glm::mat4 model = glm::mat4(1.0f); // initialize model matrix
+        glm::vec3 sunPosition = glm::vec3(0.0f, 0.0f, -5.0f); // position of the sun
+        model = glm::translate(model, sunPosition); // move the sun to its position
+        lampShader.use();
+        lampShader.setMat4("projection", projection);
+        lampShader.setMat4("view", view);
+        lampShader.setMat4("model", model);
+        sunModel.Draw(lampShader);
+
+        // update light position to match sun position
+        lightPos = sunPosition;
+
+        // use shader
+        ourShader.use();
+        ourShader.setVec3("light.position", lightPos);
+
+        // view/projection transformations
+        //glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 500.0f);
+        //glm::mat4 view = camera.GetViewMatrix();
+        //glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(1.0f, 10.0f, -25.0f));
+
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
+        ourShader.setMat4("model", model);
 
-        // draw earth object
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(1.0f, 10.0f, -25.0f));
+        // earth object
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(10.0f, 0.0f, -30.0f));
         //model = glm::translate(model, glm::vec3(12.0f, 50.0f, -80.0f)); // Adjust the translation values to position the model
         model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f)); // Scale it down if needed
 
@@ -292,14 +351,14 @@ int main()
             model = glm::rotate(model, angle1, glm::vec3(0.0f, 1.0f, 0.0f));
         }
 
-        ourShader.setMat4("model", model);
+        
         //glBindTexture(GL_TEXTURE_2D, 0);
-        ourShader.setInt("texture_diffuse1", 0);
+        ourShader.setInt("texture_diffuse1", 1);
         ourModel.Draw(ourShader);
 
         // draw mars object
         glm::mat4 marsModelMatrix = glm::mat4(1.0f);
-        marsModelMatrix = glm::translate(marsModelMatrix, glm::vec3(-40.0f, 30.0f, -85.0f));
+        marsModelMatrix = glm::translate(marsModelMatrix, glm::vec3(-20.0f, 5.0f, -40.0f));
         marsModelMatrix = glm::scale(marsModelMatrix, glm::vec3(1.0f, 1.0f, 1.0f));
 
         ourShader.setMat4("model", marsModelMatrix);
@@ -311,14 +370,14 @@ int main()
 
         // draw the flag
         glm::mat4 flagModelMatrix = glm::mat4(1.0f);
-        flagModelMatrix = glm::translate(flagModelMatrix, glm::vec3(0.0f, -0.5f, 0.0f)); // Set the flag model's position within the skybox
+        flagModelMatrix = glm::translate(flagModelMatrix, glm::vec3(0.0f, 0.25f, 0.0f)); // Set the flag model's position within the skybox
         flagModelMatrix = glm::scale(flagModelMatrix, glm::vec3(1.0f, 1.0f, 1.0f));
 
         ourShader.setMat4("model", flagModelMatrix);
-        ourShader.setInt("texture_diffuse1", 0);
+        //ourShader.setInt("texture_diffuse1", 1);
         flagModel.Draw(ourShader);
 
-        // Draw sphere light
+        // sun object
         glm::vec3 lightColor(1.0f, 1.0f, 0.0f);
         glm::vec3 lightAmbient = 0.1f * lightColor;
         glm::vec3 lightDiffuse = 0.5f * lightColor;
@@ -329,8 +388,12 @@ int main()
         ourShader.setVec3("light.specular", lightSpecular);
 
         glm::mat4 lightModel = glm::mat4(1.0f);
-        lightModel = glm::translate(lightModel, lightPos);
-        lightModel = glm::scale(lightModel, glm::vec3(0.2f, 0.2f, 0.2f)); // Scale the sphere down
+
+        sunPosition = glm::vec3(0.0f, 30.0f, -80.0f);
+        ourShader.setVec3("sun.position", sunPosition);
+        //lightModel = glm::translate(lightModel, lightPos);
+        lightModel = glm::translate(lightModel, glm::vec3(0.0f, 30.0f, -80.0f));
+        lightModel = glm::scale(lightModel, glm::vec3(1.0f, 1.0f, 1.0f)); // Scale the sphere down
         ourShader.setMat4("model", lightModel);
         sunModel.Draw(ourShader);
 
@@ -343,7 +406,7 @@ int main()
         glBindVertexArray(planeVAO);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, floorTexture);
-        planeShader.setInt("texture_diffuse1", 0);
+        planeShader.setInt("texture_diffuse1", 1);
 
         model = glm::mat4(1.0f);
         planeShader.setMat4("model", model);
@@ -402,6 +465,12 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboard(RIGHT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS && !isJumping)
+    {
+        cameraYVelocity = 5.0f; // Adjust the value to control the jump strength
+        isJumping = true;
+    }
+
 
     if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
         rotFlg1 = true;
