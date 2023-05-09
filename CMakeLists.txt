@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(final_project2)
+project(final_project)
 
 LINK_DIRECTORIES( ${CMAKE_BINARY_DIR}/lib )
 LINK_DIRECTORIES( ${CMAKE_BINARY_DIR}/bin )
@@ -60,15 +60,7 @@ if (OPENMP_FOUND)
 endif()
 
 SET(APP_SRCS1
-  source/question01.cpp
-)
-
-SET(APP_SRCS2
   source/final.cpp
-)
-
-SET(APP_SRCS3
-  source/question03.cpp
 )
 
 SET(APP_COMMON
@@ -89,28 +81,14 @@ SET(APP_HDRS
 )
 
 SET(APP_SHADERS1
-	shader/1.model_loading.vert
-	shader/1.model_loading.frag
-	shader/lighting_maps.vert
-	shader/lighting_maps.frag
-	shader/lamp.vert
-	shader/lamp.frag
-)
-
-SET(APP_SHADERS2
 	shader/2.skybox.frag
 	shader/2.skybox.vert
 	shader/1.model_loading.vert
 	shader/1.model_loading.frag
 	shader/planeShader.vert
 	shader/planeShader.frag
-)
-
-SET(APP_SHADERS3
-	shader/2.skybox.frag
-	shader/2.skybox.vert
-	shader/1.model_loading.vert
-	shader/1.model_loading.frag
+	shader/lamp.frag
+	shader/lamp.vert
 )
 
 SOURCE_GROUP("Common Files" FILES
@@ -119,27 +97,17 @@ SOURCE_GROUP("Common Files" FILES
 
 SOURCE_GROUP("Shader Files" FILES
  ${APP_SHADERS1} 
- ${APP_SHADERS2} 
- ${APP_SHADERS3}
 )
 
 SOURCE_GROUP("Source Files" FILES
  ${APP_SRCS1}   
- ${APP_SRCS2}  
- ${APP_SRCS3} 
 )
 
 configure_file(configuration/root_directory.h.in configuration/root_directory.h)
 include_directories(${CMAKE_BINARY_DIR}/configuration)
 
-add_executable(question01 ${APP_SRCS1} ${APP_COMMON}  ${APP_HDRS}  ${APP_SHADERS1})
-target_link_libraries(question01  ${COMMON_LIBS})
-
-add_executable(final ${APP_SRCS2} ${APP_COMMON}  ${APP_HDRS}  ${APP_SHADERS2})
+add_executable(final ${APP_SRCS1} ${APP_COMMON}  ${APP_HDRS}  ${APP_SHADERS1})
 target_link_libraries(final  ${COMMON_LIBS})
-
-add_executable(question03 ${APP_SRCS3} ${APP_COMMON}  ${APP_HDRS}  ${APP_SHADERS3})
-target_link_libraries(question03  ${COMMON_LIBS})
 
 include_directories( include )
 
